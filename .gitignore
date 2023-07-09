@@ -1,0 +1,50 @@
+# Ignore bundler metadata
+/.bundle/
+/vendor/
+
+# Ignore Gemfile.lock as it's auto-generated
+Gemfile.lock
+
+# Ignore any generated documentation
+/doc/
+/doc/api/
+
+# Ignore any editor-specific files
+*.swp
+*.swo
+*.sublime*
+.vscode/
+
+# Ignore any user-specific files
+.DS_Store
+.env
+
+# Ignore any logs
+/log/
+
+# Ignore any build artifacts
+/build/
+/bin/
+
+# Ignore any coverage reports
+/coverage/
+
+# Ignore any temporary files
+/tmp/
+
+# Ignore any compiled Ruby files
+*.rbc
+*.rbo
+
+# Ignore any backup files
+*~
+*.bak
+
+# Ignore any SQLite databases
+*.sqlite3
+
+# Ignore any YAML database files
+*.yml
+
+# Ignore any text editor backup files
+*.backup
