@@ -12,6 +12,7 @@ Add to `settings.json`:
 
 ```json
 "code-runner.clearPreviousOutput": true,
+"code-runner.runInTerminal": true,
 ```
 
 ## New Utility Methods
