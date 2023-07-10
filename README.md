@@ -57,10 +57,18 @@ loop do
   response = Net::HTTP.get(uri)
   data = JSON.parse(response)
 
-  puts data
+  puts data.inspect
   count += 1
   break if count > 2
 end
+```
+
+Example output:
+
+```
+[{"type"=>"programming", "setup"=>"A DHCP packet walks into a bar and asks for a beer.", "punchline"=>"Bartender says, \"here, but I’ll need that back in an hour!\"", "id"=>375}]
+[{"type"=>"programming", "setup"=>"If you put a million monkeys at a million keyboards, one of them will eventually write a Java program", "punchline"=>"the rest of them will write Perl", "id"=>26}]
+[{"type"=>"programming", "setup"=>"There are 10 types of people in this world...", "punchline"=>"Those who understand binary and those who don't", "id"=>29}]
 ```
 
 During this course will make this program more readable and introduce new features of Ruby 3.
@@ -242,7 +250,11 @@ Final person: {:first_name=>"John", :last_name=>"Doe"}
 
 ## Additional Method Features
 
-As of Ruby 3, can define a one-liner method without using `end` keyword, example:
+### Endless Methods
+
+As of Ruby 3, can define a one-liner method without using `end` keyword. Syntax is `def method_name = ...`. Notice the equals sign after method name, this indicates to Ruby that the entire method definition will appear on a single line with no `end` keyword.
+
+Example, `active?` method is defined in `Member` class below:
 
 ```ruby
 class Member
@@ -264,4 +276,188 @@ puts "John is active: #{john.active?}" # true
 puts "Fred is active: #{fred.active?}" # false
 ```
 
-Left at 0:54
+### Forward Arguments
+
+A method that accepts "forward arguments" expresses this with `...` (triple dot) syntax.
+
+As of Ruby 3, the `...` can be specified *after* the initial parameter in the method definition. This can then be passed on to other methods.
+
+Example:
+
+```ruby
+def method_a(message, signature)
+  puts "This is your message: #{message}"
+  puts "This is your signature: #{signature}"
+end
+
+# `method_b` specifies forward arguments with triple dots,
+# then passes these on to `method_a`
+def method_b(name, ...)
+  puts "Greetings #{name}!"
+  method_a(...)
+end
+
+# Usage: "Have a great day" and "abc123" become the forward arguments
+method_b("Mickey Mouse", "Have a great day", "abc123")
+# Greetings Mickey Mouse!
+# This is your message: Have a great day
+# This is your signature: abc123
+```
+
+## Demo
+
+Integrate pattern matching, hash filtering, and endless methods into joke application.
+
+Recall output from joke api is an array, for example, entering in browser: `https://official-joke-api.appspot.com/jokes/programming/random` returns something like:
+
+```json
+[
+  {
+    "type": "programming",
+    "setup": "What’s the object-oriented way to become wealthy?",
+    "punchline": "Inheritance.",
+    "id": 378
+  }
+]
+```
+
+Initial version of joke program:
+
+```ruby
+require "json"
+require "net/http"
+
+url = "https://official-joke-api.appspot.com/jokes/programming/random"
+uri = URI(url)
+
+count = 0
+
+loop do
+  response = Net::HTTP.get(uri)
+  data = JSON.parse(response)
+
+  puts data.inspect
+  count += 1
+  break if count > 2
+end
+```
+
+Array only has one element, the joke, so we can extract it with index 0:
+
+```ruby
+require "json"
+require "net/http"
+
+url = "https://official-joke-api.appspot.com/jokes/programming/random"
+uri = URI(url)
+
+count = 0
+
+loop do
+  response = Net::HTTP.get(uri)
+
+  # extract first (and only) element of the array
+  data = JSON.parse(response)[0]
+
+  puts data
+  count += 1
+  break if count > 2
+end
+```
+
+The joke hash in the array uses string keys rather than symbols. Use [transform_keys](https://docs.ruby-lang.org/en/3.2/Hash.html#method-i-transform_keys) method to transform the string keys to symbols:
+
+```ruby
+require "json"
+require "net/http"
+
+url = "https://official-joke-api.appspot.com/jokes/programming/random"
+uri = URI(url)
+
+count = 0
+
+loop do
+  response = Net::HTTP.get(uri)
+
+  # extract first (and only) element of the array
+  # transform string keys to symbols
+  data = JSON.parse(response)[0].transform_keys(&:to_sym)
+
+  puts data.inspect
+  count += 1
+  break if count > 2
+end
+```
+
+Now that we have a proper hash with symbols, can use pattern matching on the joke type (except instructor is using `programming` in uri so will always get programming type jokes):
+
+(Could also try https://official-joke-api.appspot.com/random_ten which returns array of 10 jokes of different types, although every time I tried it returns mostly `general` type, with maybe one `programming` type.)
+
+```ruby
+require "json"
+require "net/http"
+
+url = "https://official-joke-api.appspot.com/jokes/programming/random"
+uri = URI(url)
+
+count = 0
+
+loop do
+  response = Net::HTTP.get(uri)
+
+  # Extract first (and only) element of the array,
+  # and transform string keys to symbols
+  data = JSON.parse(response)[0].transform_keys(&:to_sym)
+
+  # Pattern matching in hash
+  case data
+  in { type: "programming" }
+    puts "Got a programming joke"
+  in { type: "general" }
+    puts "Got a general joke"
+  end
+
+  puts data.inspect
+  count += 1
+  break if count > 2
+end
+```
+
+Use hash filtering to get rid of joke id:
+
+```ruby
+require "json"
+require "net/http"
+
+url = "https://official-joke-api.appspot.com/jokes/programming/random"
+uri = URI(url)
+
+count = 0
+
+loop do
+  response = Net::HTTP.get(uri)
+
+  # Extract first (and only) element of the array,
+  # and transform string keys to symbols
+  data = JSON.parse(response)[0].transform_keys(&:to_sym)
+
+  # Pattern matching in hash
+  case data
+  in { type: "programming" }
+    puts "Got a programming joke"
+  in { type: "general" }
+    puts "Got a general joke"
+  end
+
+  # Hash filtering to get rid of `id` attribute
+  data = data.except(:id)
+
+  puts data.inspect
+  count += 1
+  break if count > 2
+end
+```
+
+To demonstrate endless methods, create a `Joke` class to encapsulate the data:
+
+Left at 5:03
