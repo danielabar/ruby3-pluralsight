@@ -460,4 +460,149 @@ end
 
 To demonstrate endless methods, create a `Joke` class to encapsulate the data:
 
-Left at 5:03
+```ruby
+require "json"
+require "net/http"
+require "debug"
+
+class Joke
+  attr_reader :type, :setup, :punchline
+
+  def initialize(type:, setup:, punchline:)
+    @type = type
+    @setup = setup
+    @punchline = punchline
+  end
+
+  # Endless methods
+  def programming? = @type == "programming"
+  def general? = @type == "general "
+end
+
+url = "https://official-joke-api.appspot.com/jokes/programming/random"
+uri = URI(url)
+
+count = 0
+
+loop do
+  response = Net::HTTP.get(uri)
+
+  # Extract first (and only) element of the array,
+  # and transform string keys to symbols
+  data = JSON.parse(response)[0].transform_keys(&:to_sym)
+
+  # Hash filtering to get rid of `id` attribute
+  data = data.except(:id)
+  puts data.inspect
+
+  # Instantiate a Joke instance from data hash
+  joke = Joke.new(type: data[:type], setup: data[:setup], punchline: data[:punchline])
+
+  # Use endless methods from joke class to take action based on joke type
+  if joke.programming?
+    puts "Got programming joke!"
+    puts "---"
+  elsif joke.general?
+    puts "Got general joke!"
+    puts "---"
+  end
+
+  count += 1
+  break if count > 2
+end
+```
+
+Add utility method `tell_joke` to `Joke` class:
+
+```ruby
+require "json"
+require "net/http"
+require "debug"
+
+class Joke
+  attr_reader :type, :setup, :punchline
+
+  def initialize(type:, setup:, punchline:)
+    @type = type
+    @setup = setup
+    @punchline = punchline
+  end
+
+  # Endless methods
+  def programming? = @type == "programming"
+  def general? = @type == "general"
+
+  # Utility method
+  def tell_joke
+    puts "Setup: #{@setup}"
+    puts "Punchline: #{@punchline}"
+  end
+end
+
+url = "https://official-joke-api.appspot.com/jokes/programming/random"
+uri = URI(url)
+
+count = 0
+
+loop do
+  response = Net::HTTP.get(uri)
+
+  # Extract first (and only) element of the array,
+  # and transform string keys to symbols
+  data = JSON.parse(response)[0].transform_keys(&:to_sym)
+
+  # Hash filtering to get rid of `id` attribute
+  data = data.except(:id)
+
+  # Instantiate a Joke instance from data hash
+  joke = Joke.new(type: data[:type], setup: data[:setup], punchline: data[:punchline])
+
+  # Use endless methods from joke class to take action based on joke type
+  if joke.programming?
+    puts "Got programming joke!"
+    puts "---"
+  elsif joke.general?
+    puts "Got general joke!"
+    puts "---"
+  end
+
+  joke.tell_joke
+
+  count += 1
+  break if count > 2
+end
+```
+
+## Typesafe Programming
+
+Will learn how to use RBS to define class with types.
+
+**Dynamically typed**
+
+Variable can accept any value without knowing its data type in advance, and it can change its data type dynamically at runtime, based on what it gets assigned.
+
+```
+# a is currently an integer due to assignment of 1
+a = 1
+
+# b is currently a string due to assignment of "foo"
+b = "foo"
+
+# what is c? cannot add int and string
+# Ruby: String can't be coerced into Integer (TypeError)
+# Javascript allows this and will assign 1foo to c
+c = a + b
+```
+
+**Statically typed**
+
+Eg: Java. Data type must be defined when declaring the variable, *before* any value can be assigned. Compiler can determine if allowed values are being assigned.
+
+```
+int a = 1
+string b = "foo"
+# Compiler would produce a type mismatch error
+int c = a + b
+```
+
+Left at 2:47

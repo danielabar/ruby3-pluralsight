@@ -5,7 +5,7 @@ require "debug"
 class Joke
   attr_reader :type, :setup, :punchline
 
-  def initialize(type: , setup:, punchline:)
+  def initialize(type:, setup:, punchline:)
     @type = type
     @setup = setup
     @punchline = punchline
@@ -13,7 +13,13 @@ class Joke
 
   # Endless methods
   def programming? = @type == "programming"
-  def general? = @type == "general "
+  def general? = @type == "general"
+
+  # Utility method
+  def tell_joke
+    puts "Setup: #{@setup}"
+    puts "Punchline: #{@punchline}"
+  end
 end
 
 url = "https://official-joke-api.appspot.com/jokes/programming/random"
@@ -31,11 +37,20 @@ loop do
   # Hash filtering to get rid of `id` attribute
   data = data.except(:id)
 
-  # WIP...
   # Instantiate a Joke instance from data hash
-  joke = new Joke(type: data[:type], setup: data[:setup], punchline: data[:punchline])
+  joke = Joke.new(type: data[:type], setup: data[:setup], punchline: data[:punchline])
 
-  puts data.inspect
+  # Use endless methods from joke class to take action based on joke type
+  if joke.programming?
+    puts "Got programming joke!"
+    puts "---"
+  elsif joke.general?
+    puts "Got general joke!"
+    puts "---"
+  end
+
+  joke.tell_joke
+
   count += 1
   break if count > 2
 end
