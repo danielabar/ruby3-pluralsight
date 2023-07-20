@@ -1,3 +1,23 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [What's New in Ruby 3](#whats-new-in-ruby-3)
+  - [New Utility Methods](#new-utility-methods)
+    - [Pattern Matching](#pattern-matching)
+    - [Hash Filtering](#hash-filtering)
+  - [Additional Method Features](#additional-method-features)
+    - [Endless Methods](#endless-methods)
+    - [Forward Arguments](#forward-arguments)
+  - [Demo](#demo)
+  - [Typesafe Programming](#typesafe-programming)
+  - [RBS and Type Checking](#rbs-and-type-checking)
+  - [Demo](#demo-1)
+  - [Concurrency with Fibers and Ractors](#concurrency-with-fibers-and-ractors)
+    - [Intro](#intro)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # What's New in Ruby 3
 
 My [course](https://www.pluralsight.com/courses/whats-new-ruby-3) notes learning Ruby 3 with Pluralsight.
@@ -605,4 +625,165 @@ string b = "foo"
 int c = a + b
 ```
 
-Left at 2:47
+* Ruby is interpreted/dynamic language -> not compiled.
+* Interpreted at runtime when code passed to Ruby interpreter.
+* No way to compile before program runs to perform type checking.
+
+## RBS and Type Checking
+
+**RBS**
+
+* RBS ships with Ruby 3 -> a language for defining types.
+* File ending to `.rbs` to define Ruby classes/modules structure.
+* RBS is also a tool for static type checking and analysis.
+* Similar to header files in C/C++, helps developers to understand the *structure* of the class and method signatures, but does *not* define logic.
+
+**Type Checking**
+
+* A way to perform code checking prior to runtime.
+* Popular type checking tool for Ruby is Sorbet, but it uses inline type definitions, whereas RBS uses a separate `.rbs` file.
+
+RBS: Internal way to describe types in code, then you can use a type checker tool to evaluate type safeness of code before it gets interpreted.
+
+## Demo
+
+Consider a simple class that gets initialized with first and last names. How to ensure only strings get passed in to the constructor?
+
+```ruby
+class Person
+  def initialize(first_name, last_name)
+    @first_name = first_name
+    @last_name = last_name
+  end
+end
+
+# Valid
+p1 = Person.new("John", "Doe")
+
+# Invlalid, but Ruby will allow it
+p2 = Person.new("John", 5)
+```
+
+Here's an RBS template that defines the types for the `Person` class:
+
+```ruby
+class Person
+  # declare first_name attribute as String
+  attr_reader first_name: String
+
+  # declare last_name attribute as String
+  attr_reader last_name: String
+
+  # declare that constructor can only accept Strings for first and last names
+  # declare that constructor is not expected to return anything (-> void)
+  def initialize: (String first_name, String last_name) -> void
+end
+```
+
+RBS file is similar to class, but *only* contains signatures and data type definitions.
+
+RBS files are stored in a `sig` directory (signature).
+
+Will use [steep](https://github.com/soutaro/steep) gem for type checking because its compatible with RBS.
+
+Add to Gemfile:
+
+```
+gem 'steep'
+```
+
+Place `.rbs` files in `sig` directory.
+
+From root of project, (one up from `sig` dir), run:
+
+```
+bundle exec steep init
+```
+
+Will have something like this:
+
+```
+.
+├── Steepfile
+├── person.rb
+└── sig
+    └── person.rbs
+```
+
+Update `Steepfile`, similar to `rakefile` with targets, tell it what directory contains code to be checked and where the signature files are:
+
+```ruby
+# Specify where to perform checks:
+target :typesrbs do
+  # Check current directory and all code within it.
+  check "typesrbs/person.rb"
+  # Where the signature files are located.
+  signature "sig"
+end
+```
+
+Run `bundle exec steep check` to run it, but for me, whole bunch of errors like this:
+
+```
+# Type checking files:
+
+[Steep 1.4.0] [typecheck:typecheck@4] [background] Unexpected error: #<NoMethodError: undefined method `constant_entry' for #<RBS::Environment @declarations=(916 items) @class_decls=(307 items) @interface_decls=(26 items) @alias_decls=(20 items) @constant_decls=(571 items) @global_decls=(51 items)>
+
+        entry = env.constant_entry(name)
+                   ^^^^^^^^^^^^^^^
+Did you mean?  constant_decls>
+[Steep 1.4.0] [typecheck:typecheck@4] [background]   /Users/dbaron/.rbenv/versions/3.1.2/lib/ruby/gems/3.1.0/gems/steep-1.4.0/lib/steep/signature/validator.rb:394:in `validate_one_class'
+[Steep 1.4.0] [typecheck:typecheck@4] [background]   /Users/dbaron/.rbenv/versions/3.1.2/lib/ruby/gems/3.1.0/gems/steep-1.4.0/lib/steep/services/type_check_service.rb:229:in `block (6 levels) in validate_signature'
+[Steep 1.4.0] [typecheck:typecheck@4] [background]   /Users/dbaron/.rbenv/versions/3.1.2/lib/ruby/gems/3.1.0/gems/steep-1.4.0/lib/steep.rb:201:in `sample'
+[Steep 1.4.0] [typecheck:typecheck@4] [background]   /Users/dbaron/.rbenv/versions/3.1.2/lib/ruby/gems/3.1.0/gems/steep-1.4.0/lib/steep/services/type_check_service.rb:226:in `block (5 levels) in validate_signature'
+[Steep 1.4.0] [typecheck:typecheck@0] [background] Unexpected error: #<NameError: uninitialized constant RBS::AST::Declarations::TypeAlias
+
+        when RBS::AST::Declarations::TypeAlias
+                                   ^^^^^^^^^^^
+Did you mean?  RBS::AST::TypeParam>
+```
+
+## Concurrency with Fibers and Ractors
+
+### Intro
+
+Historically, concurrent programming in Ruby has been done with threads, but threads (as compared to separate processes) tend to get messy wrt data synchronization. Multi-threaded code is non-deterministic, resulting in race conditions, and is to debug.
+
+Before Ruby 3.x, multi-thread processing didn't support parallel execution on MRI, so even if you did get a complex multi-threaded program working, it still wasn't taking advantage of multiple cores.
+
+Ractors (Ruby Actors) in Ruby 3.x solve this. Ractors support native multi-core processing in Ruby with elegant implementation.
+
+Consider the following examples using threads:
+
+```ruby
+Thread.new do
+  puts "Fetching from API..."
+end
+
+puts "Processing other stuff..."
+
+# Output:
+# Processing other stuff...
+```
+
+In the above example, no indication that the thread to fetch data from API did any work because execution of caller on the main thread has already resolved, without waiting for the created thread.
+
+The example below solves this issue by calling the `join` method on the created thread, which will cause the main thread to wait for the created thread to finish execution and merge with the calling thread, before proceeding. i.e. the original caller will not resolve until the created thread has merged with it:
+
+```ruby
+t = Thread.new do
+  puts "Fetching from API..."
+end
+
+puts "Processing other stuff..."
+t.join
+
+# Output:
+# Processing other stuff...
+# Fetching from API...
+```
+
+Complexities with threads:
+* Need to create threads and keep track of them
+* Need to make sure any created threads resolve with the main thread (i.e. original caller that spawned it)
+* More code to manage, increasing chances of introducing bugs

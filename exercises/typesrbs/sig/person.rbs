@@ -1,0 +1,6 @@
+class Person
+  attr_reader first_name: String
+  attr_reader last_name: String
+
+  def initialize: (String first_name, String last_name) -> void
+end
