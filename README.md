@@ -15,6 +15,8 @@
   - [Demo](#demo-1)
   - [Concurrency with Fibers and Ractors](#concurrency-with-fibers-and-ractors)
     - [Intro](#intro)
+    - [Threads Demo](#threads-demo)
+    - [Ractors](#ractors)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -787,3 +789,113 @@ Complexities with threads:
 * Need to create threads and keep track of them
 * Need to make sure any created threads resolve with the main thread (i.e. original caller that spawned it)
 * More code to manage, increasing chances of introducing bugs
+
+### Threads Demo
+
+Will show that threads are relatively slow, and how important it is to synchronize for sharing global values.
+
+A demo program that creates an array of 10 threads, where each thread will update a shared `c` variable 1M times,  incrementing it by one.
+
+```ruby
+# Importing the 'Benchmark' module for measuring time
+require "benchmark"
+
+# Measure the time taken to execute the code inside the block
+time_elapsed = Benchmark.measure do
+  # Initialize a global variable 'c' with a value of 0
+  # This represents the shared state of the threads we will create
+  c = 0
+
+  # Create a proc called 'fetch' that returns the value of 'c' when called
+  fetch = proc { c }
+
+  # Create an array of threads using 'map', where each thread increments 'c' one million times
+  threads = (1..10).map do |_i|
+    Thread.new do
+      # Increment 'c' one million times by fetching its value with 'fetch' and adding 1
+      1_000_000.times { c = fetch.call + 1 }
+    end
+  end
+
+  # Wait for all threads to finish using 'join'
+  threads.each(&:join)
+
+  # Print the final value of 'c' after all the thread increments
+  puts "Counter: #{c}"
+end
+
+# Print the time taken to execute the entire block of code
+# `real` is the wall-clock time elapsed during the execution of the code block.
+puts "Time elapsed: #{time_elapsed.real}"
+```
+
+Would expect incrementing 1,000,000 x 10 times = 10,000,000, but that's not what happens.
+
+Example output:
+```
+Counter: 8078995
+Time elapsed: 0.41333400000007714
+```
+
+Run again - time is similar but counter has different value:
+```
+Counter: 8086601
+Time elapsed: 0.4157869999999093
+```
+
+Result of multi-threaded program is non-deterministic due to race condition of multiple threads accessing the same shared variable `c`, without any synchronization.
+
+Solution is to use locking mechanism: [Mutex](https://docs.ruby-lang.org/en/3.2/Thread/Mutex.html). The idea is to wrap the thread logic that accesses a shared resource in a `synchronize` block. Then whichever thread is using the `c` reference will "lock" access to it so that no other threads can use it at the same time. The other threads will have to wait until the current thread is done with the shared resource.
+
+```ruby
+require "benchmark"
+
+time_elapsed = Benchmark.measure do
+  c = 0
+
+  # Create a Mutex object named 'm' for synchronization
+  m = Thread::Mutex.new
+
+  fetch = proc { c }
+
+  (1..10).map do |_i|
+    Thread.new do
+      # Perform a synchronized increment on 'c'
+      # The 'm.synchronize' block ensures that only one thread can access the shared resource 'c' at a time,
+      # preventing concurrent modifications and potential race conditions.
+      1_000_000.times { m.synchronize { c = fetch.call + 1 } }
+    end
+  end.each(&:join)
+
+  puts "Counter: #{c}"
+end
+
+puts "Time elapsed: #{time_elapsed.real}"
+```
+
+This time the output is as expected, but notice it takes about twice as long as the non-synchronized version earlier:
+```
+Counter: 10000000
+Time elapsed: 0.9445350000000872
+```
+
+Running again get consistent counter result, with pretty much the same run time.
+
+Synchronization creates performance overhead in a threaded environment.
+
+Multi-threaded programming is more complicated - have to remember to synchronize (aka lock) access to shared resources, and it creates perf overhead.
+
+### Ractors
+
+Ractor: Ruby Actor, independent entity that has its own process and can run in a separate core. Can take advantage of multi-core processing hardware. Benefits:
+
+* Each Ractor can run in its own process -> faster, more optimized than Threads. This makes Ruby 3 faster than Ruby 2.
+* Ractors only have a single thread.
+* Each Ractor runs in its own cpu core.
+* More intuitive to write parallel processing with Ractor based code as compared to Thread based code. No need for locking to handle shared state and joining.
+
+```ruby
+r = Ractor.new do
+  # Logic of ractor goes here...
+end
+```

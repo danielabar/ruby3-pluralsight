@@ -5,5 +5,5 @@ class Person
   end
 end
 
-p1 = Person.new("John", "Doe")
-p2 = Person.new("John", 5)
+Person.new("John", "Doe")
+Person.new("John", 5)
