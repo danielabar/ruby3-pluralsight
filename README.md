@@ -17,6 +17,8 @@
     - [Intro](#intro)
     - [Threads Demo](#threads-demo)
     - [Ractors](#ractors)
+    - [Demo 1](#demo-1)
+    - [Demo 2](#demo-2)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -889,13 +891,194 @@ Multi-threaded programming is more complicated - have to remember to synchronize
 
 Ractor: Ruby Actor, independent entity that has its own process and can run in a separate core. Can take advantage of multi-core processing hardware. Benefits:
 
-* Each Ractor can run in its own process -> faster, more optimized than Threads. This makes Ruby 3 faster than Ruby 2.
+* Each Ractor runs in its own process and in its own cpu core -> faster, more optimized than Threads. This makes Ruby 3 faster than Ruby 2.
 * Ractors only have a single thread.
-* Each Ractor runs in its own cpu core.
+* No synchronization or joins required
 * More intuitive to write parallel processing with Ractor based code as compared to Thread based code. No need for locking to handle shared state and joining.
+
+Create a Ractor by creating a new instance of the [Ractor](https://docs.ruby-lang.org/en/3.2/Ractor.html) class, passing in a block:
 
 ```ruby
 r = Ractor.new do
   # Logic of ractor goes here...
 end
+```
+
+**Communication Methods**
+
+`Ractor#send(x, move: false)`: Passes shareable objects (can be determined with static method `Ractor.shareable?(x)`)
+
+Shareable objects - numbers, any mutable value.
+
+Non shareable - strings - copied to ractor, must be frozen before it can become a shareable object.
+
+`Ractor#take()`: Called outside to take a value from a ractor instance's process.
+
+**Example with Data Communication**
+
+The following ractor calls the `receive` method to accept a value from the main program, and assign it to a local variable `name`.
+
+```ruby
+r = Ractor.new do
+  name = receive
+  puts "INSIDE RACTOR: Hello #{name}"
+
+  # This will be return value of ractor instance
+  name.upcase
+end
+
+# This matches up with `receive` in Ractor `r`
+r.send("John Doe")
+
+# Note that after calling `take`, ractor instance `r` is terminated and no longer available
+name_transformed = r.take
+puts "OUTSIDE RACTOR: #{name_transformed}"
+
+# Will error if you try to call it again
+r.take
+# <internal:ractor>:694:in `take': The outgoing-port is already closed (Ractor::ClosedError)
+```
+
+Outputs:
+
+```
+<internal:ractor>:267: warning: Ractor is experimental, and the behavior may change in future versions of Ruby! Also there are many implementation issues.
+INSIDE RACTOR: Hello John Doe
+OUTSIDE RACTOR: JOHN DOE
+```
+
+Ractors are thread-safe and support true multi-core parallel processing.
+
+### Demo 1
+
+Re-write thread counter code with Ractors:
+
+```ruby
+require "benchmark"
+
+time_elapsed = Benchmark.measure do
+  c = 0
+
+  (1..10).map do |_i|
+    r = Ractor.new do
+      x = receive
+      1_000_000.times { x += 1 }
+    end
+
+    r.send(c)
+    c += r.take
+  end
+
+  puts "Counter: #{c}"
+end
+
+puts "Time elapsed: #{time_elapsed.real}"
+```
+
+Output shows it runs faster than thread based implementation, and still gets correct result:
+
+```
+Counter: 10000000
+Time elapsed: 0.23488099999985934
+```
+
+### Demo 2
+
+Update the joke app to use ractors to save each joke to a file. Want the file saving to happen in parallel with the main thread that is looping over jokes.
+
+Ractor cannot reach outside itself to access variables, they must be passed in to the ractor. Will need to pass in filename to save the jokes to, and instance of the joke to be saved. Will pass in a hash:
+
+```ruby
+require "json"
+require "net/http"
+require "debug"
+
+# Joke class
+class Joke
+  attr_reader :type, :setup, :punchline
+
+  def initialize(type:, setup:, punchline:)
+    @type = type
+    @setup = setup
+    @punchline = punchline
+  end
+
+  # === NEW METHOD ADDED HERE ===
+  def extract_joke
+    "Setup: #{@setup}, Punchline: #{@punchline}"
+  end
+
+  # Endless methods
+  def programming? = @type == "programming"
+  def general? = @type == "general"
+
+  # Utility method
+  def tell_joke
+    puts "Setup: #{@setup}"
+    puts "Punchline: #{@punchline}"
+  end
+end
+
+# Main program to loop over several jokes and process them
+url = "https://official-joke-api.appspot.com/jokes/programming/random"
+uri = URI(url)
+
+# === NEW: SAVE JOKES TO A FILE
+filename = "jokes.txt"
+
+count = 0
+
+loop do
+  response = Net::HTTP.get(uri)
+
+  # Extract first (and only) element of the array,
+  # and transform string keys to symbols
+  data = JSON.parse(response)[0].transform_keys(&:to_sym)
+
+  # Hash filtering to get rid of `id` attribute
+  data = data.except(:id)
+
+  # Instantiate a Joke instance from data hash
+  joke = Joke.new(type: data[:type], setup: data[:setup], punchline: data[:punchline])
+
+  # Use endless methods from joke class to take action based on joke type
+  if joke.programming?
+    puts "Got programming joke!"
+    puts "---"
+  elsif joke.general?
+    puts "Got general joke!"
+    puts "---"
+  end
+
+  # === NEW RACTOR BASED CODE HERE TO SAVE JOKE TO FILE IN PARALLEL ===
+  r = Ractor.new do
+    # Caller passes in a hash containing filename and joke
+    d = receive
+
+    # Extract variables we need from the hash
+    f_ref = d[:filename]
+    j_ref = d[:joke]
+
+    # Check whether we should append to existing file or write to new file
+    mode = File.exist?(f_ref) ? "a" : "w"
+    File.open(f_ref, mode) do |f|
+      f.write("#{j_ref.extract_joke}\n")
+    end
+  end
+
+  # Communicate data into the Ractor
+  r.send({ filename:, joke: })
+
+  joke.tell_joke
+
+  count += 1
+  break if count > 2
+end
+```
+
+After running this, will have `jokes.txt` file created in the same directory from which the program was run. Example output:
+
+```
+Setup: I just got fired from my job at the keyboard factory., Punchline: They told me I wasn't putting in enough shifts.
+Setup: What's the best thing about a Boolean?, Punchline: Even if you're wrong, you're only off by a bit.
 ```

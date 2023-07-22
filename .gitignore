@@ -48,3 +48,6 @@ Gemfile.lock
 
 # Ignore any text editor backup files
 *.backup
+
+# Program output
+jokes.txt

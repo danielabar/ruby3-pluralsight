@@ -3,13 +3,15 @@ require "benchmark"
 time_elapsed = Benchmark.measure do
   c = 0
 
-  fetch = proc { c }
-
   (1..10).map do |_i|
-    Thread.new do
-      1_000_000.times { c = fetch.call + 1 }
+    r = Ractor.new do
+      x = receive
+      1_000_000.times { x += 1 }
     end
-  end.each(&:join)
+
+    r.send(c)
+    c += r.take
+  end
 
   puts "Counter: #{c}"
 end
